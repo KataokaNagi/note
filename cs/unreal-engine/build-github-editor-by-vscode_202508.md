@@ -247,3 +247,11 @@ C:\UnrealEngine>Engine\Build\BatchFiles\Build.bat Lyra Win64 Development "C:\Unr
     - Epic Online Services (EOS) 対応版。
     - Epic のオンライン機能（マッチメイキングやフレンドなど）を使うビルド。
 
+- ホットリロードは切った方が都度都度のコマンドラインビルドがしやすそう
+    - Live Coding を無効化する
+        - Edit → Editor Preferences
+        - General → Miscellaneous → Live Coding
+        - Enable Live Coding のチェックを外す
+        - エディタを再起動
+        - なんかHot reloadもあったから切っておく
+    - 
