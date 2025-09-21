@@ -81,4 +81,6 @@ python server.py
 必要に応じて @/Assets\Scenes\Kataoka\ColorPuzzleBase.unity にある @/Assets\Prefabs\WorkSpaces\ColorPuzzleSample.prefab を編集して。
 
 必要に応じてUnity-MCPを利用して。
+
+
 ```
