@@ -862,6 +862,20 @@ C:\UnrealEngine\LyraStarterGame\Content/UI/Hud/W_DefaultHUDLayout.uasset
   2. Ability Sets に DA_AbilitySet_Flashbang を追加
   3. B_LyraDefaultExperience で Default Pawn Data が SimplePawnData を参照していることを確認
 
+恐らくSimplePawnDataではなくHeroData_ShooterGameに設定する必要あり
+DA_AbilitySet_FlashbangにBP_ThrowFlashbangとInputTag.ThrowFlashbangを設定
+
+1. Blueprintエディタで BP_FlashbangProjectile を開く
+2. Details パネルで以下を設定：
+- Flash Blind Effect → LyraGameplayEffect_FlashBlind クラスを選択
+- Hearing Impairment Effect → LyraGameplayEffect_HearingImpairment
+クラスを選択
+
+PluginディレクトリのB_Hero_ShooterMannequin
+ 3. Details パネルで設定:
+    - Flash Effect Widget Class → W_LoadingScreen_DefaultContent
+    - Status Effects Widget Class → W_RespawnTimer
+
 C:\UnrealEngine\LyraStarterGame\Plugins\GameFeatures\ShooterCore\Content\Game\B_Hero_ShooterMannequin.uasset
 に
 
