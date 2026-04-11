@@ -9,6 +9,10 @@ $packages = @(
     @{
         Name = "Python 3 (latest)"
         Id   = "Python.Python.3"
+    },
+    @{
+        Name = "uv"
+        Id   = "Astral-sh.uv"
     }
 )
 
