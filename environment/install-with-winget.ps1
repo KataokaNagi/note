@@ -4,6 +4,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Add more packages here by appending Name/Id pairs.
+$packages = @(
+    @{
+        Name = "Python 3"
+        Id   = "Python.Python.3.13"
+    }
+)
+
 # App Installer provides winget on current Windows builds.
 $appInstallerStoreUrl = "https://apps.microsoft.com/detail/9nblggh4nns1?hl=ja-JP&gl=JP"
 $appInstallerDownloadUrl = "https://aka.ms/getwinget"
@@ -67,14 +75,6 @@ function Test-WingetPackageInstalled {
     $output = winget list --id $Id --exact --source winget 2>$null | Out-String
     return $LASTEXITCODE -eq 0 -and $output -match [regex]::Escape($Id)
 }
-
-# Add more packages here by appending Name/Id pairs.
-$packages = @(
-    @{
-        Name = "Python 3"
-        Id   = "Python.Python.3.13"
-    }
-)
 
 foreach ($package in $packages) {
     if (Test-WingetPackageInstalled -Id $package.Id) {
