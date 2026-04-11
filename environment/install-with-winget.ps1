@@ -7,8 +7,8 @@ $ErrorActionPreference = "Stop"
 # Add more packages here by appending Name/Id pairs.
 $packages = @(
     @{
-        Name = "Python 3"
-        Id   = "Python.Python.3.13"
+        Name = "Python 3 (latest)"
+        Id   = "Python.Python.3"
     }
 )
 
