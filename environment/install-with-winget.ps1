@@ -80,11 +80,18 @@ function Test-WingetPackageInstalled {
     )
 
     # winget list is used as a precheck so already-installed packages are skipped.
-    $output = winget list --id $Id --exact --source winget 2>$null | Out-String
+    $output = winget list --id $Id --exact --source winget --disable-interactivity 2>$null | Out-String
     return $LASTEXITCODE -eq 0 -and $output -match [regex]::Escape($Id)
 }
 
-function Get-WingetTableRow {
+function Refresh-PathEnvironment {
+    # Reload PATH from user and machine scope so newly installed shims resolve immediately.
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $env:Path = @($userPath, $machinePath) -join ";"
+}
+
+function Get-WingetPackageRecord {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Command,
@@ -94,15 +101,23 @@ function Get-WingetTableRow {
     )
 
     # winget list/search returns a text table, so extract the row for the package ID.
-    $output = & winget $Command --id $Id --exact --source winget 2>$null | Out-String
+    $output = & winget $Command --id $Id --exact --source winget --disable-interactivity 2>$null | Out-String
     if ($LASTEXITCODE -ne 0) {
         return $null
     }
 
     $lines = $output -split "`r?`n"
     foreach ($line in $lines) {
-        if ($line -match [regex]::Escape($Id)) {
-            return (($line -replace "\u2026", "") -split "\s{2,}").Where({ $_ -and $_.Trim() })
+        $trimmedLine = $line.Trim()
+        if ($trimmedLine -and -not $trimmedLine.StartsWith("Name ") -and -not $trimmedLine.StartsWith("---")) {
+            $parts = $trimmedLine -split '\s+'
+            if ($parts.Count -ge 3 -and $parts[$parts.Count - 2] -eq $Id) {
+                return @{
+                    Name = ($parts[0..($parts.Count - 3)] -join " ")
+                    Id = $parts[$parts.Count - 2]
+                    Version = $parts[$parts.Count - 1]
+                }
+            }
         }
     }
 
@@ -111,7 +126,8 @@ function Get-WingetTableRow {
 
 function Get-PackageExecutablePath {
     param(
-        [string[]]$Commands
+        [string[]]$Commands,
+        [string]$PackageId
     )
 
     # Try known command names and use the first path PowerShell can resolve.
@@ -119,6 +135,21 @@ function Get-PackageExecutablePath {
         $command = Get-Command $commandName -ErrorAction SilentlyContinue
         if ($command -and $command.Source) {
             return $command.Source
+        }
+    }
+
+    # Fall back to the WinGet package cache when PATH has not been refreshed yet.
+    if ($PackageId) {
+        foreach ($commandName in $Commands) {
+            $packageRoot = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+            $candidate = Get-ChildItem $packageRoot -Directory -Filter "$PackageId*" -ErrorAction SilentlyContinue |
+                ForEach-Object { Join-Path $_.FullName "$commandName.exe" } |
+                Where-Object { Test-Path $_ } |
+                Select-Object -First 1
+
+            if ($candidate) {
+                return $candidate
+            }
         }
     }
 
@@ -132,25 +163,19 @@ function Get-PackageVersionInfo {
     )
 
     # Prefer the installed version, otherwise show the latest version available in winget.
-    $installedRow = Get-WingetTableRow -Command "list" -Id $Package.Id
-    if ($installedRow) {
-        $idIndex = [Array]::IndexOf($installedRow, $Package.Id)
-        if ($idIndex -ge 0 -and $installedRow.Count -gt ($idIndex + 1)) {
-            return @{
-                State   = "Installed"
-                Version = $installedRow[$idIndex + 1]
-            }
+    $installedRecord = Get-WingetPackageRecord -Command "list" -Id $Package.Id
+    if ($installedRecord) {
+        return @{
+            State   = "Installed"
+            Version = $installedRecord.Version
         }
     }
 
-    $searchRow = Get-WingetTableRow -Command "search" -Id $Package.Id
-    if ($searchRow) {
-        $idIndex = [Array]::IndexOf($searchRow, $Package.Id)
-        if ($idIndex -ge 0 -and $searchRow.Count -gt ($idIndex + 1)) {
-            return @{
-                State   = "NotInstalled"
-                Version = $searchRow[$idIndex + 1]
-            }
+    $searchRecord = Get-WingetPackageRecord -Command "search" -Id $Package.Id
+    if ($searchRecord) {
+        return @{
+            State   = "NotInstalled"
+            Version = $searchRecord.Version
         }
     }
 
@@ -168,7 +193,7 @@ function Show-PackageStatus {
 
     # Combine winget metadata and resolved command path into a readable status block.
     $versionInfo = Get-PackageVersionInfo -Package $Package
-    $executablePath = Get-PackageExecutablePath -Commands $Package.Commands
+    $executablePath = Get-PackageExecutablePath -Commands $Package.Commands -PackageId $Package.Id
     $installPath = if ($executablePath) { Split-Path -Parent $executablePath } else { "Not installed or path not detected" }
 
     switch ($versionInfo.State) {
@@ -216,6 +241,7 @@ foreach ($package in $packages) {
 
     Write-Host "Installing $($package.Name) ($($package.Id))..."
     winget @args
+    Refresh-PathEnvironment
     Show-PackageStatus -Package $package
     Write-Host ""
 }
