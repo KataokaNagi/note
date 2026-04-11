@@ -1,5 +1,6 @@
 param(
-    [switch]$WhatIf
+    [switch]$WhatIf,
+    [switch]$NoPause
 )
 
 $ErrorActionPreference = "Stop"
@@ -105,3 +106,7 @@ foreach ($package in $packages) {
 }
 
 Write-Host "Done."
+
+if (-not $NoPause) {
+    Read-Host "Press Enter to exit" | Out-Null
+}
