@@ -15,7 +15,7 @@ $packages = @(
     },
     @{
         Name = "uv"
-        Id   = "Astral-sh.uv"
+        Id   = "astral-sh.uv"
         Commands = @("uv")
     }
 )
