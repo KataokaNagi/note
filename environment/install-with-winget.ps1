@@ -10,10 +10,13 @@ $packages = @(
     @{
         Name = "Python 3 (latest)"
         Id   = "Python.Python.3"
+        # Commands are used to locate the installed executable path.
+        Commands = @("python", "py")
     },
     @{
         Name = "uv"
         Id   = "Astral-sh.uv"
+        Commands = @("uv")
     }
 )
 
@@ -81,9 +84,119 @@ function Test-WingetPackageInstalled {
     return $LASTEXITCODE -eq 0 -and $output -match [regex]::Escape($Id)
 }
 
+function Get-WingetTableRow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Id
+    )
+
+    # winget list/search returns a text table, so extract the row for the package ID.
+    $output = & winget $Command --id $Id --exact --source winget 2>$null | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        return $null
+    }
+
+    $lines = $output -split "`r?`n"
+    foreach ($line in $lines) {
+        if ($line -match [regex]::Escape($Id)) {
+            return (($line -replace "\u2026", "") -split "\s{2,}").Where({ $_ -and $_.Trim() })
+        }
+    }
+
+    return $null
+}
+
+function Get-PackageExecutablePath {
+    param(
+        [string[]]$Commands
+    )
+
+    # Try known command names and use the first path PowerShell can resolve.
+    foreach ($commandName in $Commands) {
+        $command = Get-Command $commandName -ErrorAction SilentlyContinue
+        if ($command -and $command.Source) {
+            return $command.Source
+        }
+    }
+
+    return $null
+}
+
+function Get-PackageVersionInfo {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Package
+    )
+
+    # Prefer the installed version, otherwise show the latest version available in winget.
+    $installedRow = Get-WingetTableRow -Command "list" -Id $Package.Id
+    if ($installedRow) {
+        $idIndex = [Array]::IndexOf($installedRow, $Package.Id)
+        if ($idIndex -ge 0 -and $installedRow.Count -gt ($idIndex + 1)) {
+            return @{
+                State   = "Installed"
+                Version = $installedRow[$idIndex + 1]
+            }
+        }
+    }
+
+    $searchRow = Get-WingetTableRow -Command "search" -Id $Package.Id
+    if ($searchRow) {
+        $idIndex = [Array]::IndexOf($searchRow, $Package.Id)
+        if ($idIndex -ge 0 -and $searchRow.Count -gt ($idIndex + 1)) {
+            return @{
+                State   = "NotInstalled"
+                Version = $searchRow[$idIndex + 1]
+            }
+        }
+    }
+
+    return @{
+        State   = "Unknown"
+        Version = "Unknown"
+    }
+}
+
+function Show-PackageStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Package
+    )
+
+    # Combine winget metadata and resolved command path into a readable status block.
+    $versionInfo = Get-PackageVersionInfo -Package $Package
+    $executablePath = Get-PackageExecutablePath -Commands $Package.Commands
+    $installPath = if ($executablePath) { Split-Path -Parent $executablePath } else { "Not installed or path not detected" }
+
+    switch ($versionInfo.State) {
+        "Installed" {
+            Write-Host "Installed : $($Package.Name)"
+            Write-Host "Version   : $($versionInfo.Version)"
+            Write-Host "Path      : $installPath"
+        }
+        "NotInstalled" {
+            Write-Host "Not installed : $($Package.Name)"
+            Write-Host "Latest      : $($versionInfo.Version)"
+            Write-Host "Path        : Not installed"
+        }
+        default {
+            Write-Host "Unknown status : $($Package.Name)"
+            Write-Host "Version        : Unknown"
+            Write-Host "Path           : $installPath"
+        }
+    }
+}
+
 foreach ($package in $packages) {
+    # Show current status before deciding whether installation is needed.
+    Show-PackageStatus -Package $package
+
     if (Test-WingetPackageInstalled -Id $package.Id) {
         Write-Host "Skipping $($package.Name) ($($package.Id)): already installed."
+        Write-Host ""
         continue
     }
 
@@ -103,10 +216,13 @@ foreach ($package in $packages) {
 
     Write-Host "Installing $($package.Name) ($($package.Id))..."
     winget @args
+    Show-PackageStatus -Package $package
+    Write-Host ""
 }
 
 Write-Host "Done."
 
 if (-not $NoPause) {
+    # Keep the window open when the script is launched by double-click.
     Read-Host "Press Enter to exit" | Out-Null
 }
